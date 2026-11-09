@@ -45,13 +45,16 @@ jobs:
         run: python -m pytest -q
 
   release:
-    name: Build release archive
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    name: Build and deploy exact commit
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.test.result == 'success' }}
     needs: test
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: read
+    concurrency:
+      group: catalog-deploy
+      cancel-in-progress: false
     steps:
       - name: Checkout exact commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -99,3 +102,55 @@ jobs:
           archive: false
           if-no-files-found: error
           retention-days: 7
+
+      - name: Prepare SSH access
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$VPS_SSH_KEY"
+          test -n "$VPS_KNOWN_HOSTS"
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$VPS_SSH_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Upload exact package to the server
+        env:
+          VPS_HOST: ${{ vars.VPS_HOST }}
+          VPS_USER: ${{ vars.VPS_USER }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST"
+          test -n "$VPS_USER"
+          archive="release/catalog-${COMMIT_SHA}.zip"
+          test -f "$archive"
+          digest="$(sha256sum "$archive" | awk '{print $1}')"
+          test "${#digest}" -eq 64
+          ssh -i "$HOME/.ssh/id_ed25519" \
+            -o IdentitiesOnly=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -o StrictHostKeyChecking=yes \
+            -o BatchMode=yes \
+            "$VPS_USER@$VPS_HOST" "upload $COMMIT_SHA $digest" < "$archive"
+
+      - name: Verify deployed site
+        env:
+          CATALOG_URL: ${{ vars.CATALOG_URL }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test -n "$CATALOG_URL"
+          base="${CATALOG_URL%/}"
+          version="$(curl -fsS --max-time 20 "$base/version")"
+          test "$version" = "$COMMIT_SHA"
+          home="$(curl -fsS --max-time 20 "$base/")"
+          printf '%s' "$home" | grep -q 'Каталог букетов Ромашки'
+          b007="$(curl -fsS --max-time 20 "$base/?q=B007")"
+          printf '%s' "$b007" | grep -q '4 950'
+          printf '%s' "$b007" | grep -q 'В наличии: 4 шт.'
+          about="$(curl -fsS --max-time 20 "$base/about")"
+          printf '%s' "$about" | grep -q 'Сейчас в SQLite 10000 товаров.'

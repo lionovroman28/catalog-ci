@@ -17,6 +17,7 @@ PRODUCTS = [
     ("B007", "Большое спасибо", "Розы и эустомы", 4950, 4),
     ("B010", "Утренний свет", "Тюльпаны", 1800, 1),
 ]
+TEST_COMMIT = "a" * 40
 
 
 @pytest.fixture(autouse=True)
@@ -48,7 +49,7 @@ def database(tmp_path: Path) -> Path:
 
 @pytest.fixture()
 def app(database: Path):
-    application = create_app(database=database, title="Тестовый каталог")
+    application = create_app(database=database, title="Тестовый каталог", commit=TEST_COMMIT)
     application.config.update(TESTING=True)
     return application
 
@@ -119,6 +120,14 @@ def test_about_page_reports_database_total(client):
     assert response.status_code == 200
     assert "Как работает каталог" in html
     assert "Сейчас в SQLite 4 товаров." in html
+
+
+def test_version_endpoint_returns_only_commit(client):
+    response = client.get("/version")
+
+    assert response.status_code == 200
+    assert response.get_data(as_text=True) == TEST_COMMIT + "\n"
+    assert "/opt" not in text(response)
 
 
 @pytest.mark.parametrize(

@@ -6,18 +6,22 @@ import json
 from contextlib import closing
 import os
 from pathlib import Path
+import re
 import sqlite3
 
 from flask import Flask, abort, render_template, request
 
 BASE = Path(__file__).resolve().parent
+COMMIT_RE = re.compile(r'[0-9a-f]{40}')
 
 
-def create_app(database: str | Path | None = None, title: str | None = None) -> Flask:
+def create_app(database: str | Path | None = None, title: str | None = None,
+               commit: str | None = None) -> Flask:
     app = Flask(__name__)
     app.config['DATABASE'] = str(Path(database or os.environ.get('CATALOG_DB', BASE / 'data/catalog.db')).resolve())
     app.config['MAX_CONTENT_LENGTH'] = 1024
     app.config['CATALOG_TITLE'] = title or os.environ.get('CATALOG_TITLE', 'Каталог букетов Ромашки')
+    app.config['COMMIT'] = commit or ''
 
     @app.template_filter('rubles')
     def rubles(value: int) -> str:
@@ -77,6 +81,18 @@ def create_app(database: str | Path | None = None, title: str | None = None) -> 
         except (sqlite3.Error, ValueError, OSError):
             return render_template('error.html', message='Описание временно недоступно.'), 503
         return render_template('about.html', total=total, title=app.config['CATALOG_TITLE'], report=report)
+
+    @app.get('/version')
+    def version():
+        commit = app.config.get('COMMIT', '')
+        if not commit:
+            try:
+                commit = (BASE / 'COMMIT.txt').read_text(encoding='ascii').strip()
+            except OSError:
+                commit = ''
+        if not COMMIT_RE.fullmatch(commit):
+            abort(404)
+        return commit + '\n', {'Content-Type': 'text/plain; charset=utf-8'}
 
     @app.errorhandler(400)
     def bad_request(error):
