@@ -72,7 +72,7 @@ jobs:
           set -euo pipefail
           test -n "$COMMIT_SHA"
           mkdir -p release
-          git archive --format=zip --output="release/catalog-${COMMIT_SHA}.zip" "$COMMIT_SHA" -- app.py "import catalog.py" requirements.txt templates static
+          git -c core.autocrlf=false archive --format=zip --output="release/catalog-${COMMIT_SHA}.zip" "$COMMIT_SHA" -- app.py "import catalog.py" requirements.txt templates static
           python - <<'PY'
           import os
           import zipfile
