@@ -11,15 +11,14 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: catalog-ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   test:
     name: Tests and policy checks
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    concurrency:
+      group: catalog-ci-${{ github.ref }}
+      cancel-in-progress: true
     steps:
       - name: Checkout exact commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
