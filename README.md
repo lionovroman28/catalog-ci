@@ -7,3 +7,30 @@
 Для агента: Python 3.11+, зависимости requirements.txt. Импортёр — `import catalog.py`; сначала изучите `--help`. Приложение создаётся фабрикой `app:create_app()`, база по умолчанию `data/catalog.db`, другой путь задаётся CATALOG_DB. Локальный запуск через Waitress на 127.0.0.1 и свободном порту. Публикация на VPS не требуется.
 
 Контрольный товар B007: 4 950 рублей, остаток 4. Исходник XLSX и SQLite не добавляются в Git. Исходные данные сохраняются. Собственные наблюдения за ученика не заполняйте.
+
+## Локальная проверка
+
+Windows:
+
+```powershell
+py -3.15 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --requirement requirements-dev.txt
+.\.venv\Scripts\python.exe -m pytest -q
+```
+
+Linux/macOS:
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install --requirement requirements-dev.txt
+python -m pytest -q
+```
+
+Одна документированная команда всех тестов: `python -m pytest -q` из корня проекта. Тесты создают временную SQLite из коротких вымышленных записей, не читают XLSX, не используют серверную базу и не открывают сеть.
+
+## CI и выпуск
+
+GitHub Actions запускает проверки для `pull_request` к `main` и `push` в `main`. В проверках нет серверных секретов; права ограничены `contents: read`. После успешных тестов push в `main` собирает архив из точного коммита `github.sha` и загружает его как артефакт. В архив входят только код, шаблоны, стили, `requirements.txt` и `COMMIT.txt`; SQLite, XLSX, `.env`, ключи, `.git`, журналы, окружения и тестовые файлы исключены.
+
+Рабочая база остаётся на сервере отдельно. Deploy в этом репозитории отсутствует до подключения VPS. Проверка явных секретов ограничена набором шаблонов и не является гарантией их отсутствия.

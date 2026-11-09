@@ -1,0 +1,101 @@
+name: Catalog CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: catalog-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Tests and policy checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          clean: false
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.11"
+
+      - name: Install pinned dependencies
+        run: |
+          python -m pip install --no-cache-dir --index-url https://pypi.org/simple --requirement requirements-dev.txt
+          python -m pip check
+
+      - name: Check tracked paths and limited secret patterns
+        run: python .github/scripts/check_repo.py
+
+      - name: Run tests
+        run: python -m pytest -q
+
+  release:
+    name: Build release archive
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          clean: false
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.11"
+
+      - name: Build archive from exact commit
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test -n "$COMMIT_SHA"
+          mkdir -p release
+          git archive --format=zip --output="release/catalog-${COMMIT_SHA}.zip" "$COMMIT_SHA" -- app.py "import catalog.py" requirements.txt templates static
+          python - <<'PY'
+          import os
+          import zipfile
+          from pathlib import Path
+
+          sha = os.environ["COMMIT_SHA"]
+          archive = Path("release") / f"catalog-{sha}.zip"
+          with zipfile.ZipFile(archive, "a") as zf:
+              zf.writestr("COMMIT.txt", sha + "\n")
+          with zipfile.ZipFile(archive) as zf:
+              for name in zf.namelist():
+                  print(name)
+          PY
+
+      - name: Verify archive composition
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+        run: python .github/scripts/check_archive.py
+
+      - name: Upload release archive
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          path: release/catalog-${{ github.sha }}.zip
+          archive: false
+          if-no-files-found: error
+          retention-days: 7

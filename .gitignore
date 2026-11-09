@@ -1,0 +1,29 @@
+# Default deny: only the explicit allowlist below may be committed.
+*
+
+# Source code and documentation
+!/.gitignore
+!/README.md
+!/requirements.txt
+!/requirements-dev.txt
+!/app.py
+!/import catalog.py
+
+# Templates and styles
+!/templates/
+!/templates/*.html
+!/static/
+!/static/*.css
+
+# Tests and CI
+!/tests/
+!/tests/*.py
+!/.github/
+!/.github/workflows/
+!/.github/workflows/ci.yml
+!/.github/scripts/
+!/.github/scripts/check_repo.py
+!/.github/scripts/check_archive.py
+
+# Everything else stays ignored: XLSX, SQLite, .env, keys, archives,
+# logs, virtual environments, caches, temporary files and local reports.
