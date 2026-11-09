@@ -23,6 +23,19 @@ def create_app(database: str | Path | None = None, title: str | None = None,
     app.config['CATALOG_TITLE'] = title or os.environ.get('CATALOG_TITLE', 'Каталог букетов Ромашки')
     app.config['COMMIT'] = commit or ''
 
+    def resolved_commit() -> str:
+        value = app.config.get('COMMIT', '')
+        if not value:
+            try:
+                value = (BASE / 'COMMIT.txt').read_text(encoding='ascii').strip()
+            except OSError:
+                value = ''
+        return value if COMMIT_RE.fullmatch(value) else ''
+
+    @app.context_processor
+    def inject_commit():
+        return {'commit_sha': resolved_commit()}
+
     @app.template_filter('rubles')
     def rubles(value: int) -> str:
         return f'{value:,}'.replace(',', ' ') + ' руб.'
@@ -84,13 +97,8 @@ def create_app(database: str | Path | None = None, title: str | None = None,
 
     @app.get('/version')
     def version():
-        commit = app.config.get('COMMIT', '')
+        commit = resolved_commit()
         if not commit:
-            try:
-                commit = (BASE / 'COMMIT.txt').read_text(encoding='ascii').strip()
-            except OSError:
-                commit = ''
-        if not COMMIT_RE.fullmatch(commit):
             abort(404)
         return commit + '\n', {'Content-Type': 'text/plain; charset=utf-8'}
 

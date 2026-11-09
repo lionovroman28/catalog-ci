@@ -130,6 +130,13 @@ def test_version_endpoint_returns_only_commit(client):
     assert "/opt" not in text(response)
 
 
+def test_catalog_shows_ci_version_mark(client):
+    html = text(client.get("/"))
+
+    assert "Версия CI/CD" in html
+    assert TEST_COMMIT[:7] in html
+
+
 @pytest.mark.parametrize(
     "url",
     [
