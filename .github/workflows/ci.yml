@@ -105,7 +105,7 @@ jobs:
       - name: Prepare SSH access
         env:
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
-          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+          VPS_KNOWN_HOSTS: ${{ vars.VPS_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
           test -n "$VPS_SSH_KEY"
